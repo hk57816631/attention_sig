@@ -20,3 +20,8 @@
   <li>FCN-8s</li>
   <li>pspnet</li>
 </ul>
+<p>gensamples.py is used to make arguments of training samples before training.</p>
+<p>test.py is used to test one testing sample.</p>
+<p>test_input_patch.py is used to a set of testing samples. The names of the testing set should be given in test_file = './val.txt'. The visible segmentation result and the possibility map are given in “. png” and “. mat” files respectively.</p>
+<p>train.txt is the name list of training samples.</p>
+<p>wavelet.py is used to compute the wavelet transform of original images.</p>
