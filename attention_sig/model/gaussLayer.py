@@ -1,11 +1,11 @@
-from keras.layers import Layer
+from keras.layers import Layer, concatenate
 import tensorflow as tf
-
+from keras import initializers
 # import tensorflow_probability as tfp
 # tfd = tfp.distributions
 # tfb = tfp.distributions.bijectors
 
-tfd = tf.contrib.distributions
+# tfd = tf.contrib.distributions
 
 
 class FuzzyLayer(Layer):
@@ -18,28 +18,54 @@ class FuzzyLayer(Layer):
         super(FuzzyLayer, self).__init__(**kwargs)
 
     def build(self, input_shape):
-        self.scale = self.add_weight(name='v1', shape=(self.class_num, 1, self.channel_num, self.channel_num),
+        self.scale_1 = self.add_weight(name='v1', shape=(1,self.img_height, self.img_width, self.channel_num),
                                      initializer='uniform', trainable=True)
-        self.mean = self.add_weight(name='v2', shape=(self.class_num, 1, self.channel_num), initializer='uniform',
+        self.mean_1 = self.add_weight(name='v2', shape=(1,self.img_height, self.img_width, self.channel_num),
+                                    initializer='uniform',
+                                    trainable=True)
+        self.scale_2 = self.add_weight(name='v3', shape=(1,self.img_height, self.img_width, self.channel_num),
+                                     initializer='uniform', trainable=True)
+        self.mean_2 = self.add_weight(name='v4', shape=(1,self.img_height, self.img_width, self.channel_num),
+                                    initializer='uniform',
+                                    trainable=True)
+        self.scale_3 = self.add_weight(name='v5', shape=(1,self.img_height, self.img_width, self.channel_num),
+                                     initializer='uniform', trainable=True)
+        self.mean_3 = self.add_weight(name='v6', shape=(1,self.img_height, self.img_width, self.channel_num),
+                                    initializer='uniform',
+                                    trainable=True)
+        self.scale_4 = self.add_weight(name='v7', shape=(1,self.img_height, self.img_width, self.channel_num),
+                                     initializer='uniform', trainable=True)
+        self.mean_4 = self.add_weight(name='v8', shape=(1,self.img_height, self.img_width, self.channel_num),
+                                    initializer='uniform',
+                                    trainable=True)
+        self.scale_5 = self.add_weight(name='v9', shape=(1,self.img_height, self.img_width, self.channel_num),
+                                     initializer='uniform', trainable=True)
+        self.mean_5 = self.add_weight(name='v10', shape=(1,self.img_height, self.img_width, self.channel_num),
+                                    initializer='uniform',
                                     trainable=True)
         super(FuzzyLayer, self).build(input_shape)
 
     def call(self, x):
-        self.scale_temp = tf.tile(self.scale, multiples=[1, self.img_height * self.img_width, 1, 1])
-        self.mean_temp = tf.tile(self.mean, multiples=[1, self.img_height * self.img_width, 1])
-        x = tf.reshape(x, [-1, self.img_height * self.img_width, self.channel_num])
+        self.scale_temp = concatenate(
+            [self.scale_1, self.scale_2, self.scale_3, self.scale_4, self.scale_5], axis=0)
+        self.mean_temp = concatenate([self.mean_1, self.mean_2, self.mean_3, self.mean_4,
+                                      self.mean_5], axis=0)
         output = []
         for i in range(self.class_num):
-            mvn = tfd.MultivariateNormalTriL(
-                loc=self.mean_temp[i],
-                scale_tril=self.scale_temp[i])
-            gauss = mvn.prob(x)
-            output.append(gauss)
+            x1 = tf.subtract(x, self.mean_temp[i])
+            x2 = tf.square(x1)
+            x3 = tf.divide(x2, self.scale_temp[i])
+            x4 = tf.multiply(-0.5, x3)
+            gauss = tf.exp(x4)
+
+            output.append(gauss[:,:,:,0])
 
         output = tf.convert_to_tensor(output)
-        output = tf.transpose(output, perm=[1, 2, 0])
-        output = tf.reshape(output, [-1, self.img_height, self.img_width, self.class_num])
-        output = tf.nn.l2_normalize(output, dim=3)
+        output = tf.transpose(output, perm=[1, 2, 3, 0])
+        sum1 = tf.reduce_sum(output, axis=3)
+        sum1 = tf.reshape(sum1, [-1, self.img_height, self.img_width, 1])
+        sum1 = tf.tile(sum1, multiples=[1, 1, 1, self.class_num])
+        output = tf.divide(output, sum1)
         return output
 
     def compute_output_shape(self, input_shape):
