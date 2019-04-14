@@ -4,7 +4,7 @@ from keras.layers import BatchNormalization
 from keras.optimizers import Adam
 from keras import backend as K
 from keras.layers.core import Lambda
-from model.gaussLayer import FuzzyLayer_sigmoid
+from model.gaussLayer import FuzzyLayer
 def dice_coef(y_true, y_pred):
     return (2. * K.sum(y_true * y_pred) + 1.) / (K.sum(y_true) + K.sum(y_pred) + 1.)
 def fuzzyfunc(x):
@@ -16,33 +16,38 @@ def fuzzyfunc(x):
     fuzzy_W_tensor = tf.multiply(2.0, fuzzy_W_tensor)
     fuzzy_W_tensor = tf.subtract(1.0, fuzzy_W_tensor)
     return fuzzy_W_tensor
+
+def axismax(x):
+    x_max = tf.reduce_max(x, axis=3)
+    x_max = tf.reshape(x_max, [-1, 128, 128, 1])
+    return x_max
+
+
 def unet(num_classes, input_shape, lr_init, lr_decay, vgg_weight_path=None):
     img_input = Input(input_shape)
-
-    fuzzyLayer = FuzzyLayer_sigmoid((input_shape[0], input_shape[1], 1), (input_shape[0], input_shape[1], num_classes))(img_input)
-    fuzzy_W_tensor = Lambda(lambda x: fuzzyfunc(x))(fuzzyLayer)
+    gray = Lambda(lambda x: tf.slice(x, [0, 0, 0, 0], [-1, -1, -1, 1]))(img_input)
+    wavlet1 = Lambda(lambda x: tf.slice(x, [0, 0, 0, 2], [-1, -1, -1, 1]))(img_input)
+    wavlet2 = Lambda(lambda x: tf.slice(x, [0, 0, 0, 1], [-1, -1, -1, 1]))(img_input)
+    fuzzyLayer_1 = FuzzyLayer((input_shape[0], input_shape[1], 1), (input_shape[0], input_shape[1], num_classes))(gray)
+    fuzzyLayer_2 = FuzzyLayer((input_shape[0], input_shape[1], 1), (input_shape[0], input_shape[1], num_classes))(wavlet1)
+    fuzzyLayer_3 = FuzzyLayer((input_shape[0], input_shape[1], 1), (input_shape[0], input_shape[1], num_classes))(wavlet2)
+    fuzzy_W_tensor1 = Lambda(lambda x: fuzzyfunc(x))(fuzzyLayer_1)
+    fuzzy_W_tensor2 = Lambda(lambda x: fuzzyfunc(x))(fuzzyLayer_2)
+    fuzzy_W_tensor3 = Lambda(lambda x: fuzzyfunc(x))(fuzzyLayer_3)
+    x_max1 = Lambda(lambda x: axismax(x))(fuzzy_W_tensor1)
+    x_max2 = Lambda(lambda x: axismax(x))(fuzzy_W_tensor2)
+    x_max3 = Lambda(lambda x: axismax(x))(fuzzy_W_tensor3)
+    productlayer1 = multiply([wavlet1, x_max2])
+    productlayer2 = multiply([wavlet2, x_max3])
+    productlayer3 = multiply([gray, x_max1])
+    unet_input = concatenate([productlayer3, productlayer1, productlayer2], axis=3)
 
     # Block 1
-    x = Conv2D(64, (3, 3), padding='same', name='block1_conv1')(img_input)
+    x = Conv2D(64, (3, 3), padding='same', name='block1_conv1')(unet_input)
     x = BatchNormalization()(x)
     x = Activation('relu')(x)
 
     x = Conv2D(64, (3, 3), padding='same', name='block1_conv2')(x)
-    x = BatchNormalization()(x)
-
-    fuzzy_W_tensor1 = Lambda(lambda x: tf.slice(x, [0, 0, 0, 0], [-1, -1, -1, 1]))(fuzzy_W_tensor)
-    fuzzy_W_tensor2 = Lambda(lambda x: tf.slice(x, [0, 0, 0, 1], [-1, -1, -1, 1]))(fuzzy_W_tensor)
-    fuzzy_W_tensor3 = Lambda(lambda x: tf.slice(x, [0, 0, 0, 2], [-1, -1, -1, 1]))(fuzzy_W_tensor)
-    fuzzy_W_tensor4 = Lambda(lambda x: tf.slice(x, [0, 0, 0, 3], [-1, -1, -1, 1]))(fuzzy_W_tensor)
-    fuzzy_W_tensor5 = Lambda(lambda x: tf.slice(x, [0, 0, 0, 4], [-1, -1, -1, 1]))(fuzzy_W_tensor)
-    productlayer1 = multiply([x, fuzzy_W_tensor1])
-    productlayer2 = multiply([x, fuzzy_W_tensor2])
-    productlayer3 = multiply([x, fuzzy_W_tensor3])
-    productlayer4 = multiply([x, fuzzy_W_tensor4])
-    productlayer5 = multiply([x, fuzzy_W_tensor5])
-
-    x = concatenate([x, productlayer1, productlayer2, productlayer3, productlayer4, productlayer5], axis=3)
-    x = Conv2D(64, (1, 1), padding='same', name='block1_conv3')(x)
     x = BatchNormalization()(x)
     block_1_out = Activation('relu')(x)
 
