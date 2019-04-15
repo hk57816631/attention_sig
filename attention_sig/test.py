@@ -103,8 +103,8 @@ for i in range(nb_data_img):
     obj = findObject(np.array(PIL_img_pal))
 
     plt.ion()
-    plt.figure('Unet test')  # 图像窗口名称
-    plt.suptitle(Xpath)  # 图片名称
+    plt.figure('Unet test')  
+    plt.suptitle(Xpath) 
     plt.subplot(1, 3, 1), plt.title('org')
     plt.imshow(imgorg), plt.axis('off')
     plt.subplot(1, 3, 2), plt.title(obj)
@@ -113,7 +113,7 @@ for i in range(nb_data_img):
     plt.imshow(imglab), plt.axis('off')
 
     plt.show()
-    str = input("按任意键继续...")
+    str = input("press any key...")
     if str == 'q' or str == 'Q':
         break
     plt.close(1)
